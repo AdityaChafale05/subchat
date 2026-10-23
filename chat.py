@@ -2,10 +2,11 @@ import os
 import json
 import httpx
 from dotenv import load_dotenv
-from rag_pipeline import save_to_memory , search_memory
+from rag import save_to_memory , search_memory
 
 load_dotenv()
-API_KEY = os.getenv("api_groq")
+OLLAMA_URL = os.getenv("LLM_URL", "http://localhost:11434/v1/chat/completions")
+MODEL = os.getenv("CHAT_MODEL", "gemma3:4b")
 MEMORY_FILE = "main_memory.json"
 
 # --- Load main chat memory ---
@@ -30,30 +31,23 @@ print(f"Rebuilt {rebuilt} messages into searchable memory.")
     
 
 
+
 def ask_groq(messages):
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": "openai/gpt-oss-20b",
-        "messages": messages,
-        "max_tokens": 250
-    }
+    payload = {"model": MODEL,
+               "messages": messages, 
+               "max_tokens": 250}
     try:
-        response = httpx.post("https://api.groq.com/openai/v1/chat/completions", headers=headers, json=payload)
+        response = httpx.post(OLLAMA_URL, json=payload, timeout=120)
         if response.status_code == 200:
             result = response.json()
             reply = result["choices"][0]["message"]["content"]
             tokens = result["usage"]["total_tokens"]
             return reply, tokens
-        else:
-            print(f"API Error {response.status_code}: {response.text}")
-            return None, None
+        print(f"API Error {response.status_code}: {response.text}")
+        return None, None
     except Exception as e:
         print(f"Network/Request Error: {e}")
         return None, None
-
 
 def save_memory(conversation):
     with open(MEMORY_FILE, "w") as f:
